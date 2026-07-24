@@ -1,0 +1,20 @@
+# Arquivos internos de desenvolvimento e validação
+/AGENTS.md
+/auditoria/
+
+# Entregas binárias locais: publicar compactadas em GitHub Releases
+/ROMs_Prontas/
+*.img
+*.img.gz
+*.rar
+*.7z
+*.zip
+
+# Arquivo de verificação local não incluído neste repositório
+SHA256SUMS.txt
+
+# Temporários do sistema
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
