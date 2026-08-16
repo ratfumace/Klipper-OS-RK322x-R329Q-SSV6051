@@ -1,0 +1,34 @@
+# Backups compactados pesados
+*.tar.gz
+*.tgz
+*.zip
+
+# Arquivos binários de firmware (evita inchar o histórico do Git)
+*.bin
+
+# Pastas de extrações temporárias de backup
+backup_extraido/
+backup_completo_extraido/
+
+# Logs e relatórios temporários de erro
+backup_errors.txt
+
+# Ignorar scripts e relatorios de IA
+*.py
+AGENTS.md
+RELATORIO_KLIPPER.md
+klipper_inventario.txt
+SHA256SUMS
+*.sha256
+2.80
+
+# Ignorar pacotes de codigo fonte e firmwares (.elf, .bundle)
+codigo_fonte_pacotes/
+firmware_prtouch_f401/
+fontes_referencia/
+
+# Ignorar configurações pessoais de impressora e MCU
+printer.cfg
+mainsail.cfg
+tudo_que_foi_usado/configuracao_klipper/
+tudo_que_foi_usado/firmware_mcu_gravado/
