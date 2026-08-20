@@ -16,6 +16,7 @@ backup_errors.txt
 # Ignorar scripts e relatorios de IA
 *.py
 AGENTS.md
+agent.md
 RELATORIO_KLIPPER.md
 klipper_inventario.txt
 SHA256SUMS
