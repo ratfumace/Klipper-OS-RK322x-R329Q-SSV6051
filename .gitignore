@@ -1,7 +1,16 @@
-# Backups compactados pesados
+# Backups compactados pesados e imagens
 *.tar.gz
 *.tgz
 *.zip
+*.rar
+*.img
+*.img.gz
+
+# Arquivos temporários de patch
+debugfs_script.txt
+default-wifi-powersave-on.conf
+nginx_default_site
+multimidia_backup/
 
 # Arquivos binários de firmware (evita inchar o histórico do Git)
 *.bin
