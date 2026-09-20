@@ -21,6 +21,10 @@ impressora 3D com Klipper.
 - Tela inicial do terminal mostrando IP Ethernet e IP Wi-Fi.
 - Terminal com destaque vermelho; a interface web mantém o tema original.
 - Correção do reinício físico da TV Box por watchdog.
+- Portal Web Integrado em `http://impressora.local` (ou `http://IP/wifi`):
+  - Configuração fácil de rede Wi-Fi e IP fixo.
+  - Integração com o app móvel Creality Cloud (upload direto do arquivo `rasp_pie_credential.tk`).
+  - Atualização do Sistema OTA com 1 clique diretamente do GitHub.
 
 ## Hardware alvo
 

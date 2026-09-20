@@ -43,3 +43,9 @@ printer.cfg
 mainsail.cfg
 tudo_que_foi_usado/configuracao_klipper/
 tudo_que_foi_usado/firmware_mcu_gravado/
+
+# Credenciais e tokens pessoais
+*.tk
+rasp_pie_credential.tk
+__pycache__/
+*.pyc
