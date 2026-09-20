@@ -1,117 +1,83 @@
 #!/bin/bash
-# Configura o Watchdog Inteligente de Busca e Reconexão Automática do Wi-Fi com Hotspot Fallback Rápido (12-18s)
-# TV Box (SSV6051 / RK322x)
+# Configura o Watchdog Inteligente de Reconexão Contínua do Wi-Fi na TV Box (SSV6051 / RK322x)
+# Mantém o Wi-Fi sempre conectado sem derrubar conexões saudáveis e sem modo hotspot.
 
 echo "Instalando script de watchdog em /usr/local/bin/wifi-watchdog.sh..."
 
 cat << 'EOF' > /usr/local/bin/wifi-watchdog.sh
 #!/bin/bash
-# WiFi Intelligent Auto-Connect, Fallback Hotspot & Watchdog for Klipper OS TV Box (SSV6051 / RK322x)
+# WiFi Intelligent Auto-Reconnect & Watchdog for Klipper OS TV Box (SSV6051 / RK322x)
+# Mantem o Wi-Fi sempre conectado sem derrubar conexoes saudaveis e sem modo hotspot.
 
-HOTSPOT_NAME="Hotspot-Setup"
-HOTSPOT_SSID="impressora"
-HOTSPOT_PASS="impressora"
 FAIL_COUNT=0
-HOTSPOT_TIMER=0
-
-create_hotspot_profile() {
-    if ! nmcli connection show "$HOTSPOT_NAME" >/dev/null 2>&1; then
-        nmcli connection add type wifi ifname wlan0 con-name "$HOTSPOT_NAME" autoconnect no ssid "$HOTSPOT_SSID" >/dev/null 2>&1
-        nmcli connection modify "$HOTSPOT_NAME" 802-11-wireless.mode ap 802-11-wireless.band bg >/dev/null 2>&1
-        nmcli connection modify "$HOTSPOT_NAME" 802-11-wireless-security.key-mgmt wpa-psk 802-11-wireless-security.psk "$HOTSPOT_PASS" >/dev/null 2>&1
-        nmcli connection modify "$HOTSPOT_NAME" ipv4.method shared ipv4.addresses 192.168.4.1/24 >/dev/null 2>&1
-    fi
-}
-
-create_hotspot_profile
 
 while true; do
-    CLIENT_CONN=$(nmcli -t -f NAME,TYPE connection show 2>/dev/null | grep ":802-11-wireless" | grep -v "$HOTSPOT_NAME" | head -n1 | cut -d: -f1)
-    ACTIVE_CONN=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null | grep ":wlan0$" | cut -d: -f1)
+    ETH_STATE=$(nmcli -t -f DEVICE,STATE dev 2>/dev/null | grep "^eth0:" | cut -d: -f2)
+    WLAN_STATE=$(nmcli -t -f DEVICE,STATE dev 2>/dev/null | grep "^wlan0:" | cut -d: -f2)
 
-    # 1. Se estiver conectado no Wi-Fi cliente (de casa)
-    if [ -n "$ACTIVE_CONN" ] && [ "$ACTIVE_CONN" != "$HOTSPOT_NAME" ]; then
-        GATEWAY=$(ip route show 2>/dev/null | awk '/default/ {print $3}' | head -n1)
+    CLIENT_CONN=$(nmcli -t -f NAME,TYPE connection show 2>/dev/null | grep ":802-11-wireless" | head -n1 | cut -d: -f1)
+    [ -z "$CLIENT_CONN" ] && CLIENT_CONN="KlipperOS WiFi"
+
+    # 1. Se wlan0 ja estiver conectada
+    if [ "$WLAN_STATE" = "connected" ]; then
+        # Se o cabo ethernet tambem estiver conectado, nao precisa se preocupar
+        if [ "$ETH_STATE" = "connected" ]; then
+            FAIL_COUNT=0
+            sleep 15
+            continue
+        fi
+
+        # Testar conectividade via wlan0 com 3 pings e timeout de 2s
+        GATEWAY=$(ip route show dev wlan0 2>/dev/null | awk '/default/ {print $3}' | head -n1)
         [ -z "$GATEWAY" ] && GATEWAY="192.168.31.1"
 
-        if ping -c 1 -W 2 "$GATEWAY" >/dev/null 2>&1; then
+        if ping -I wlan0 -c 3 -W 2 "$GATEWAY" >/dev/null 2>&1; then
             FAIL_COUNT=0
-            HOTSPOT_TIMER=0
-            sleep 10
+            sleep 15
+            continue
+        else
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Falha de ping no gateway $GATEWAY via wlan0 ($FAIL_COUNT/5)..."
+
+            # Apenas se falhar 5 vezes consecutivas (~1 minuto de silencio total)
+            if [ $FAIL_COUNT -ge 5 ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Conexao wlan0 sem resposta ha mais de 1 minuto. Reconectando..."
+                nmcli device disconnect wlan0 >/dev/null 2>&1 || true
+                sleep 2
+                nmcli connection up "$CLIENT_CONN" >/dev/null 2>&1 || true
+                FAIL_COUNT=0
+                sleep 15
+            else
+                sleep 10
+            fi
             continue
         fi
     fi
 
-    # 2. Se estiver operando em modo Ponto de Acesso (Hotspot 'impressora')
-    if [ "$ACTIVE_CONN" = "$HOTSPOT_NAME" ]; then
-        HOTSPOT_TIMER=$((HOTSPOT_TIMER + 1))
-
-        # A cada ~18 segundos no Hotspot (6 ciclos de 3s), checar se a rede de casa voltou
-        if [ $HOTSPOT_TIMER -ge 6 ]; then
-            HOTSPOT_TIMER=0
-
-            HAS_CLIENT=$(ip neigh show dev wlan0 2>/dev/null | grep -E "192\.168\.4\.[0-9]+" | grep -v "FAILED" | head -n1)
-
-            if [ -z "$HAS_CLIENT" ] && [ -n "$CLIENT_CONN" ]; then
-                TARGET_SSID=$(nmcli -g 802-11-wireless.ssid connection show "$CLIENT_CONN" 2>/dev/null)
-                if [ -n "$TARGET_SSID" ]; then
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Pausando Hotspot por 2s para verificar se a rede '$TARGET_SSID' voltou..."
-                    nmcli connection down "$HOTSPOT_NAME" >/dev/null 2>&1 || true
-                    sleep 1
-                    nmcli device wifi rescan 2>/dev/null || true
-                    sleep 1
-
-                    if nmcli -t -f SSID dev wifi list 2>/dev/null | grep -Fqx "$TARGET_SSID"; then
-                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rede '$TARGET_SSID' detectada! Reconectando no Wi-Fi de casa..."
-                        nmcli connection up "$CLIENT_CONN" >/dev/null 2>&1 || true
-                        FAIL_COUNT=0
-                        sleep 5
-                        continue
-                    else
-                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rede '$TARGET_SSID' ainda ausente. Reativando Hotspot '$HOTSPOT_SSID'..."
-                        nmcli connection up "$HOTSPOT_NAME" >/dev/null 2>&1 || true
-                    fi
-                fi
-            fi
-        fi
-
-        sleep 3
+    # 2. Se wlan0 estiver em processo de conexao / autenticacao
+    if [ "$WLAN_STATE" = "connecting" ] || [ "$WLAN_STATE" = "need-auth" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] wlan0 em negociacao ($WLAN_STATE)... aguardando."
+        sleep 10
         continue
     fi
 
-    # 3. Se estiver desconectado (procurando rede cliente)
+    # 3. Se wlan0 estiver desconectada (disconnected / unavailable)
     FAIL_COUNT=$((FAIL_COUNT + 1))
-
-    TARGET_SSID=""
-    if [ -n "$CLIENT_CONN" ]; then
-        TARGET_SSID=$(nmcli -g 802-11-wireless.ssid connection show "$CLIENT_CONN" 2>/dev/null)
-    fi
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] wlan0 desconectada (Tentativa #$FAIL_COUNT). Buscando Wi-Fi..."
 
     nmcli device wifi rescan 2>/dev/null || true
-
-    if [ -n "$TARGET_SSID" ] && nmcli -t -f SSID dev wifi list 2>/dev/null | grep -Fqx "$TARGET_SSID"; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rede '$TARGET_SSID' detectada no ar! Conectando..."
-        nmcli connection up "$CLIENT_CONN" >/dev/null 2>&1 || true
-        FAIL_COUNT=0
-        sleep 5
-        continue
-    fi
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sem conexao cliente (Tentativa #$FAIL_COUNT/4)..."
-
-    # Apos 4 tentativas (~12 a 15 segundos sem achar rede cliente), sobe o Hotspot 'impressora'
-    if [ $FAIL_COUNT -ge 4 ] || [ -z "$CLIENT_CONN" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Nenhuma rede Wi-Fi encontrada. Subindo Ponto de Acesso (Hotspot) '$HOTSPOT_SSID'..."
-        create_hotspot_profile
-        nmcli connection down "$CLIENT_CONN" 2>/dev/null || true
-        nmcli connection up "$HOTSPOT_NAME" >/dev/null 2>&1 || true
-        FAIL_COUNT=0
-        HOTSPOT_TIMER=0
-        sleep 3
-        continue
-    fi
-
     sleep 3
+    nmcli connection up "$CLIENT_CONN" >/dev/null 2>&1 || true
+
+    # Se passar de 5 minutos ininterruptos travado (20 ciclos de 15s)
+    if [ $FAIL_COUNT -ge 20 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Mais de 5 minutos sem sinal. Reiniciando NetworkManager..."
+        systemctl restart NetworkManager 2>/dev/null || true
+        FAIL_COUNT=0
+        sleep 10
+    fi
+
+    sleep 12
 done
 EOF
 
@@ -138,4 +104,4 @@ systemctl daemon-reload
 systemctl enable wifi-watchdog.service
 systemctl restart wifi-watchdog.service
 
-echo "Pronto! O Watchdog inteligente de Wi-Fi rápido (12s) está ativo e monitorando."
+echo "Pronto! O Watchdog inteligente de Wi-Fi contínuo está ativo e monitorando."

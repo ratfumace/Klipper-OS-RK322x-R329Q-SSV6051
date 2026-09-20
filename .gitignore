@@ -24,6 +24,7 @@ backup_errors.txt
 
 # Ignorar scripts e relatorios de IA
 *.py
+!tudo_que_foi_usado/wifi_portal_server.py
 AGENTS.md
 agent.md
 RELATORIO_KLIPPER.md
