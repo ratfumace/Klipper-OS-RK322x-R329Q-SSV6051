@@ -134,10 +134,48 @@ Com o IP mostrado na tela inicial:
 ```text
 Mainsail/Fluidd: http://IP_DA_TV_BOX
 Moonraker API:   http://IP_DA_TV_BOX:7125
+Portal Klipper:  http://impressora.local  ou  http://IP_DA_TV_BOX/wifi
 ```
 
 O Nginx é mantido porque publica Mainsail/Fluidd na porta 80. A interface web
 usa o tema original; a personalização vermelha existe somente no terminal.
+
+## Portal Web `impressora.local` (Central de Controle)
+
+O Klipper OS conta com uma central de controle web moderna e responsiva (com tema escuro) acessível diretamente pelo navegador no computador ou smartphone:
+
+- **Endereço mDNS:** [http://impressora.local](http://impressora.local)
+- **Atalho via IP:** `http://IP_DA_TV_BOX/wifi` ou porta direta `http://IP_DA_TV_BOX:8088`
+
+### Funcionalidades do `impressora.local`:
+
+#### 1. 📶 Conexão Wi-Fi e Gerenciamento de Rede
+- **Escanear Redes:** Lista todas as redes Wi-Fi disponíveis no ar em tempo real, com porcentagem de sinal e indicação de criptografia (WPA2/WPA3).
+- **Redes Ocultas:** Permite digitar manualmente o SSID de redes que não transmitem o nome publicamente.
+- **Configuração de IP:**
+  - **⚡ DHCP Automático:** Obtenção dinâmica de endereço IP pelo roteador.
+  - **⚙️ IP Fixo / Estático:** Definição manual de IP desejado, gateway do roteador e servidores DNS (ex: Cloudflare `1.1.1.1` e Google `8.8.8.8`).
+- **Status em Tempo Real:** Mostra se a impressora está conectada, intensidade do sinal Wi-Fi, rede atual e endereço IP ativo.
+
+#### 2. ☁️ Integração com Creality Cloud
+Permite vincular sua impressora 3D ao aplicativo móvel **Creality Cloud** para monitorar e controlar impressões de qualquer lugar pelo celular:
+- **Upload em 1 Clique (.tk):** Basta arrastar e soltar ou selecionar o arquivo `rasp_pie_credential.tk` gerado pelo aplicativo Creality Cloud. O portal extrai automaticamente o token e autentica.
+- **Entrada Manual de Token:** Permite colar diretamente o token JWT ou o JSON do aplicativo caso prefira.
+- **Seleção de Modelo:** Menu com os principais modelos Creality (`Ender-3 V3 SE`, `Ender-3 V3 KE`, `Ender-3 S1`, `Ender-3 V2`, `K1`, etc.) ou opção para digitar um modelo customizado.
+- **Vinculação Automática:** Registra o dispositivo na API da Creality Cloud, configura o daemon OctoPrint em segundo plano e estabelece a conexão MQTT instantaneamente.
+- **Painel de Nuvem:** Exibe status do serviço (`Ativo` 🟢 / `Parado` 🔴), conexão com a nuvem (`Conectado à Nuvem` 🟢), modelo vinculado e o ID único do dispositivo.
+- **Ações Rápidas:** Botões para reiniciar o serviço de nuvem ou desvincular caso queira trocar de conta Creality.
+
+#### 3. 🔄 Atualizador do Sistema OTA (1-Clique)
+Mantenha seu Klipper OS sempre atualizado diretamente a partir do repositório oficial do GitHub:
+- **Comparação de Versão:** Exibe o hash do commit local instalado versus o commit mais recente publicado na branch `main` do GitHub.
+- **Status da Versão:** Identifica automaticamente se há atualizações pendentes (`🟢 Sistema Atualizado` ou `🚀 Nova Atualização Disponível!`).
+- **Atualização com 1 Clique:** Baixa os scripts e códigos atualizados do GitHub, verifica a sintaxe e integridade, atualiza os arquivos de sistema e reinicia os serviços em segundo plano.
+- **Terminal de Log em Tempo Real:** Exibe um console na tela mostrando cada etapa do download e instalação.
+- **Reparo / Reinstalação:** Permite forçar a reinstalação dos componentes mais recentes caso seja necessário restaurar os arquivos originais.
+
+#### 4. 🚀 Atalho Rápido para o Mainsail
+- Botão direto para alternar instantaneamente para o painel de impressão **Mainsail** na porta 80.
 
 ## Configuração da impressora
 
