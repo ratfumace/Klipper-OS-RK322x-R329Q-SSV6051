@@ -22,6 +22,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Klipper OS - Central de Controle</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
@@ -450,7 +453,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (btnCheck) { btnCheck.disabled = true; btnCheck.textContent = 'Consultando GitHub...'; }
 
             try {
-                const res = await fetch('/api/update/status' + (force ? '?force=1' : ''));
+                const res = await fetch('/api/update/status?t=' + Date.now() + (force ? '&force=1' : ''));
                 const data = await res.json();
 
                 document.getElementById('curLocalCommit').innerHTML = `<code>${data.local_sha}</code>`;
@@ -517,7 +520,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             updatePollInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/update/log');
+                    const res = await fetch('/api/update/log?t=' + Date.now());
                     const data = await res.json();
                     
                     if (data.log) {
@@ -531,7 +534,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         statusBox.className = 'status-box success';
                         statusBox.innerHTML = '<strong>🎉 Atualização Concluída com Sucesso!</strong><br>O portal foi atualizado e reiniciado.<br>Recarregando em instantes...';
                         btn.textContent = '✅ Atualização Concluída';
-                        setTimeout(() => window.location.reload(), 4500);
+                        setTimeout(() => { window.location.href = window.location.origin + window.location.pathname + '?r=' + Date.now(); }, 4000);
                     } else if (data.error && !data.running) {
                         clearInterval(updatePollInterval);
                         statusBox.className = 'status-box error';
@@ -1067,6 +1070,16 @@ def run_system_update():
             IS_UPDATING = False
 
 class PortalHandler(http.server.BaseHTTPRequestHandler):
+    def send_json(self, data, status_code=200):
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode('utf-8'))
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -1074,29 +1087,17 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/api/status':
             status = get_wifi_status()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(status).encode('utf-8'))
+            self.send_json(status)
             return
             
         if parsed.path == '/api/scan':
             nets = scan_wifi_networks()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(nets).encode('utf-8'))
+            self.send_json(nets)
             return
 
         if parsed.path == '/api/creality/status':
             cc_status = get_creality_status()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(cc_status).encode('utf-8'))
+            self.send_json(cc_status)
             return
 
         if parsed.path == '/api/update/status':
@@ -1119,11 +1120,7 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
                 "update_available": update_available,
                 "is_updating": IS_UPDATING
             }
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(resp_payload).encode('utf-8'))
+            self.send_json(resp_payload)
             return
 
         if parsed.path == '/api/update/log':
@@ -1137,20 +1134,19 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as e:
                     content = f"Erro ao ler log: {str(e)}"
             
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({
+            self.send_json({
                 "running": IS_UPDATING,
                 "log": content,
                 "success": "STATUS: SUCCESS" in content,
                 "error": "ERRO:" in content
-            }).encode('utf-8'))
+            })
             return
         
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
         self.end_headers()
         self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
 
@@ -1171,18 +1167,12 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
 
                 if ssid:
                     apply_wifi_connection(ssid, password, ip_mode, static_ip, gateway, dns)
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"status": "ok", "message": "Conectando..."}).encode('utf-8'))
+                    self.send_json({"status": "ok", "message": "Conectando..."})
                     return
             except Exception:
                 pass
             
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "error", "message": "Dados inválidos."}).encode('utf-8'))
+            self.send_json({"status": "error", "message": "Dados inválidos."}, 400)
             return
 
         if parsed.path == '/api/creality/setup':
@@ -1191,25 +1181,16 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
                 token = data.get('token', '')
                 model = data.get('model', 'Ender-3 V3 SE').strip() or 'Ender-3 V3 SE'
                 result = setup_creality_cloud(token, model)
-                self.send_response(200 if result.get("status") == "ok" else 400)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(result).encode('utf-8'))
+                self.send_json(result, 200 if result.get("status") == "ok" else 400)
                 return
             except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+                self.send_json({"status": "error", "message": str(e)}, 500)
                 return
 
         if parsed.path == '/api/creality/restart':
             ensure_octoprint_sd_disabled()
             subprocess.run(['systemctl', 'restart', 'octoprint.service'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "Serviço Creality Cloud reiniciado!"}).encode('utf-8'))
+            self.send_json({"status": "ok", "message": "Serviço Creality Cloud reiniciado!"})
             return
 
         if parsed.path == '/api/creality/reset':
@@ -1220,28 +1201,19 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     pass
             subprocess.run(['systemctl', 'restart', 'octoprint.service'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "Configurações da Creality Cloud removidas com sucesso!"}).encode('utf-8'))
+            self.send_json({"status": "ok", "message": "Configurações da Creality Cloud removidas com sucesso!"})
             return
 
         if parsed.path == '/api/update/start':
             if IS_UPDATING:
-                self.send_response(409)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "error", "message": "Atualização já em andamento."}).encode('utf-8'))
+                self.send_json({"status": "error", "message": "Atualização já em andamento."}, 409)
                 return
                 
             t = threading.Thread(target=run_system_update)
             t.daemon = True
             t.start()
             
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "Processo de atualização iniciado com sucesso!"}).encode('utf-8'))
+            self.send_json({"status": "ok", "message": "Processo de atualização iniciado com sucesso!"})
             return
 
     def log_message(self, format, *args):
