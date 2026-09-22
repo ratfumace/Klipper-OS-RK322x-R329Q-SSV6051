@@ -885,6 +885,22 @@ def extract_jwt_token(raw_input):
         return raw_input
     return None
 
+def ensure_octoprint_sd_disabled():
+    try:
+        octo_cfg = '/home/klipper/.octoprint/config.yaml'
+        if os.path.exists(octo_cfg):
+            import yaml
+            with open(octo_cfg, 'r') as f:
+                data = yaml.safe_load(f) or {}
+            if 'feature' not in data:
+                data['feature'] = {}
+            if data['feature'].get('sdSupport') is not False:
+                data['feature']['sdSupport'] = False
+                with open(octo_cfg, 'w') as f:
+                    yaml.dump(data, f, default_flow_style=False)
+    except Exception:
+        pass
+
 def get_creality_status():
     octo_installed = os.path.exists('/home/klipper/OctoPrint/venv/bin/octoprint')
     service_active = False
@@ -982,6 +998,7 @@ def setup_creality_cloud(token_raw, model="Ender-3 V3 SE"):
     with open(cfg_path, 'w') as f:
         json.dump(config_content, f, indent=2)
         
+    ensure_octoprint_sd_disabled()
     subprocess.run(['chown', '-R', 'klipper:klipper', '/home/klipper/.octoprint'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.run(['systemctl', 'restart', 'octoprint.service'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
@@ -1187,6 +1204,7 @@ class PortalHandler(http.server.BaseHTTPRequestHandler):
                 return
 
         if parsed.path == '/api/creality/restart':
+            ensure_octoprint_sd_disabled()
             subprocess.run(['systemctl', 'restart', 'octoprint.service'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

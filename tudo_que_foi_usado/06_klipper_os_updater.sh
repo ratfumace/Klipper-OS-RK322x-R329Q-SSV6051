@@ -110,6 +110,52 @@ except Exception as e:
     systemctl restart octoprint.service 2>/dev/null || true
 fi
 
+# Desativar polling de SD no OctoPrint para evitar spam de 'Not SD printing.' no console do Mainsail
+if [ -f "/home/klipper/.octoprint/config.yaml" ]; then
+    echo "Garantindo sdSupport=false no OctoPrint para silenciar M27 no console..."
+    python3 -c "
+import yaml
+path = '/home/klipper/.octoprint/config.yaml'
+try:
+    with open(path, 'r') as f: cfg = yaml.safe_load(f) or {}
+    if 'feature' not in cfg: cfg['feature'] = {}
+    if cfg['feature'].get('sdSupport') is not False:
+        cfg['feature']['sdSupport'] = False
+        with open(path, 'w') as f: yaml.dump(cfg, f, default_flow_style=False)
+        print('OctoPrint sdSupport desativado com sucesso.')
+except Exception as e:
+    print('Nota OctoPrint config:', e)
+" 2>/dev/null || true
+    systemctl restart octoprint.service 2>/dev/null || true
+fi
+
+# Garantir macros de compatibilidade M24 / M25 para fatiadores (OrcaSlicer / PrusaSlicer)
+if [ -f "/home/klipper/printer_data/config/macro.cfg" ]; then
+    if ! grep -q "gcode_macro M25" "/home/klipper/printer_data/config/macro.cfg"; then
+        echo "Adicionando macros de compatibilidade M24/M25 no macro.cfg..."
+        cat << 'EOF' >> "/home/klipper/printer_data/config/macro.cfg"
+
+# ====================================================================
+# COMPATIBILIDADE COM FATIADORES (ORCASLICER / PRUSASLICER M24 / M25)
+# ====================================================================
+
+[gcode_macro M25]
+rename_existing: M25.1
+description: Redireciona comando de pausa do Marlin/OrcaSlicer para o PAUSE do Klipper
+gcode:
+    PAUSE
+
+[gcode_macro M24]
+rename_existing: M24.1
+description: Redireciona comando de retomada do Marlin/OrcaSlicer para o RESUME do Klipper
+gcode:
+    RESUME
+EOF
+        chown klipper:klipper "/home/klipper/printer_data/config/macro.cfg" 2>/dev/null || true
+    fi
+fi
+
+
 # Salvar metadados da versao local
 cat << VERSION_EOF > /etc/klipper-os-version.json
 {
