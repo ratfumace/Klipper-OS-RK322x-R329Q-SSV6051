@@ -450,45 +450,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         async function fetchUpdateStatus(force) {
             const btnCheck = document.getElementById('btnCheckUpdate');
-            if (btnCheck) { btnCheck.disabled = true; btnCheck.textContent = 'Consultando GitHub...'; }
+            if (force && btnCheck) { btnCheck.disabled = true; btnCheck.textContent = 'Consultando GitHub...'; }
 
             try {
                 const res = await fetch('/api/update/status?t=' + Date.now() + (force ? '&force=1' : ''));
                 const data = await res.json();
 
-                document.getElementById('curLocalCommit').innerHTML = `<code>${data.local_sha}</code>`;
-                document.getElementById('curRemoteCommit').innerHTML = `<a href="https://github.com/ratfumace/Klipper-OS-RK322x-R329Q-SSV6051/commit/${data.remote_sha_full}" target="_blank" style="color: #10b981;"><code>${data.remote_sha}</code> ↗</a>`;
-                document.getElementById('curCommitMsg').textContent = data.remote_msg || 'Sem detalhes';
+                if (data.local_sha) {
+                    document.getElementById('curLocalCommit').innerHTML = `<code>${data.local_sha}</code>`;
+                }
+                if (data.remote_sha) {
+                    document.getElementById('curRemoteCommit').innerHTML = `<a href="https://github.com/ratfumace/Klipper-OS-RK322x-R329Q-SSV6051/commit/${data.remote_sha_full}" target="_blank" style="color: #10b981;"><code>${data.remote_sha}</code> ↗</a>`;
+                }
+                if (data.remote_msg) {
+                    document.getElementById('curCommitMsg').textContent = data.remote_msg;
+                }
 
                 const badge = document.getElementById('updateBadge');
                 const btnUpdate = document.getElementById('btnDoUpdate');
 
                 if (data.is_updating) {
+                    isUpdating = true;
                     badge.innerHTML = '<span class="badge-yellow">⏳ Atualização em Andamento</span>';
                     btnUpdate.disabled = true;
                     btnUpdate.textContent = '⏳ Atualizando o sistema...';
                     startLogPolling();
-                } else if (data.update_available) {
-                    badge.innerHTML = '<span class="badge-yellow">🚀 Nova Atualização Disponível!</span>';
-                    btnUpdate.disabled = false;
-                    btnUpdate.textContent = '🚀 Atualizar Sistema Agora (1-Clique)';
-                    btnUpdate.className = 'btn-green';
                 } else {
-                    badge.innerHTML = '<span class="badge-green">🟢 Sistema Atualizado</span>';
-                    btnUpdate.disabled = false;
-                    btnUpdate.textContent = '🛠️ Reinstalar / Reparar Versão Mais Recente';
-                    btnUpdate.className = 'btn-secondary';
+                    isUpdating = false;
+                    if (data.update_available) {
+                        badge.innerHTML = '<span class="badge-yellow">🚀 Nova Atualização Disponível!</span>';
+                        btnUpdate.disabled = false;
+                        btnUpdate.textContent = '🚀 Atualizar Sistema Agora (1-Clique)';
+                        btnUpdate.className = 'btn-green';
+                    } else {
+                        badge.innerHTML = '<span class="badge-green">🟢 Sistema Atualizado</span>';
+                        btnUpdate.disabled = false;
+                        btnUpdate.textContent = '🛠️ Reinstalar / Reparar Versão Mais Recente';
+                        btnUpdate.className = 'btn-secondary';
+                    }
                 }
             } catch (e) {
                 console.error('Update status fetch error:', e);
             } finally {
-                if (btnCheck) { btnCheck.disabled = false; btnCheck.textContent = '🔄 Verificar Atualizações'; }
+                if (force && btnCheck) { btnCheck.disabled = false; btnCheck.textContent = '🔄 Verificar Atualizações'; }
             }
         }
 
         async function startSystemUpdate() {
             if (!confirm('Deseja iniciar a atualização do sistema? O portal e os scripts serão atualizados diretamente a partir do GitHub.')) return;
             
+            isUpdating = true;
             const btn = document.getElementById('btnDoUpdate');
             const statusBox = document.getElementById('updateStatusBox');
             const logBox = document.getElementById('updateLogBox');
@@ -508,10 +519,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 statusBox.className = 'status-box error';
                 statusBox.innerHTML = `<strong>Erro ao iniciar atualização:</strong> ${err.message}`;
                 btn.disabled = false;
+                isUpdating = false;
             }
         }
 
         function startLogPolling() {
+            isUpdating = true;
             if (updatePollInterval) clearInterval(updatePollInterval);
             
             const statusBox = document.getElementById('updateStatusBox');
@@ -532,18 +545,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     if (data.success) {
                         clearInterval(updatePollInterval);
                         statusBox.className = 'status-box success';
-                        statusBox.innerHTML = '<strong>🎉 Atualização Concluída com Sucesso!</strong><br>O portal foi atualizado e reiniciado.<br>Recarregando em instantes...';
-                        btn.textContent = '✅ Atualização Concluída';
-                        setTimeout(() => { window.location.href = window.location.origin + window.location.pathname + '?r=' + Date.now(); }, 4000);
+                        statusBox.innerHTML = '<strong>🎉 Atualização Concluída com Sucesso!</strong><br>Sincronizando novo status do sistema...';
+                        btn.textContent = '⏳ Concluindo sincronização...';
+
+                        // Polling suave até que o serviço confirme o término e o novo commit
+                        let checkCount = 0;
+                        const syncTimer = setInterval(async () => {
+                            checkCount++;
+                            try {
+                                const stRes = await fetch('/api/update/status?force=1&t=' + Date.now());
+                                const stData = await stRes.json();
+                                if (!stData.is_updating || checkCount >= 15) {
+                                    clearInterval(syncTimer);
+                                    isUpdating = false;
+                                    await fetchUpdateStatus(true);
+                                    statusBox.innerHTML = '<strong>🎉 Sistema Atualizado com Sucesso!</strong><br>Todos os componentes estão na versão mais recente.';
+                                }
+                            } catch (e) {
+                                if (checkCount >= 20) {
+                                    clearInterval(syncTimer);
+                                    isUpdating = false;
+                                    fetchUpdateStatus(true);
+                                }
+                            }
+                        }, 1200);
+
                     } else if (data.error && !data.running) {
                         clearInterval(updatePollInterval);
                         statusBox.className = 'status-box error';
                         statusBox.innerHTML = '<strong>Ocorreu um erro durante a atualização.</strong><br>Consulte o log acima para detalhes.';
                         btn.disabled = false;
                         btn.textContent = 'Tentar Novamente';
+                        isUpdating = false;
+                        fetchUpdateStatus(true);
                     }
                 } catch (e) {
-                    // Servidor pode estar reiniciando
+                    // Servidor pode estar reiniciando temporariamente
                 }
             }, 1000);
         }
@@ -738,7 +775,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (activeTab === 'wifi') fetchStatus();
             else if (activeTab === 'creality') fetchCrealityStatus();
             else if (activeTab === 'update' && !isUpdating) fetchUpdateStatus();
-        }, 8000);
+        }, 5000);
     </script>
 </body>
 </html>
