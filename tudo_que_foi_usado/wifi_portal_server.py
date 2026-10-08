@@ -860,6 +860,10 @@ def apply_wifi_connection(ssid, password, ip_mode="dhcp", static_ip="", gateway=
             subprocess.run([
                 'nmcli', 'connection', 'modify', 'KlipperOS WiFi',
                 '802-11-wireless-security.key-mgmt', 'wpa-psk',
+                '802-11-wireless-security.proto', 'rsn',
+                '802-11-wireless-security.pairwise', 'ccmp',
+                '802-11-wireless-security.group', 'ccmp',
+                '802-11-wireless-security.pmf', 'disable',
                 '802-11-wireless-security.psk', password
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         

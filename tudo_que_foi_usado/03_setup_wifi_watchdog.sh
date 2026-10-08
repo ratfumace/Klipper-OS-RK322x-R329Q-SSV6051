@@ -22,6 +22,9 @@ while true; do
     CLIENT_CONN=$(nmcli -t -f NAME,TYPE connection show 2>/dev/null | grep ":802-11-wireless" | head -n1 | cut -d: -f1)
     [ -z "$CLIENT_CONN" ] && CLIENT_CONN="KlipperOS WiFi"
 
+    # Garante compatibilidade do chip SSV6051 com roteadores WPA2/WPA3 (evita rejeicao por PMF/802.11w)
+    nmcli connection modify "$CLIENT_CONN" 802-11-wireless-security.pmf disable 802-11-wireless-security.proto rsn 2>/dev/null || true
+
     if [ "$WLAN_STATE" = "connected" ]; then
         if [ "$ETH_STATE" = "connected" ]; then
             FAIL_COUNT=0
